@@ -9,7 +9,7 @@ const wafMiddleware = async (req, res, next) => {
     if (
         req.method === 'GET' &&
         (
-            req.path.startsWith('/static') ||
+            req.path.startsWith('/static') ||//needs revision
             req.path.endsWith('.js') ||
             req.path.endsWith('.css') ||
             req.path.endsWith('.png') ||

