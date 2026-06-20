@@ -137,7 +137,7 @@ def extract_special_features(texts):
     return np.array(features)
 
 #Load pre-trained model
-preTrainedModel = joblib.load('waf_ai_engine.pkl')
+preTrainedModel = joblib.load('waf_ai_engine_logistic_regression.pkl')
 print("Model loaded successfully")
 
 #Load label encoding

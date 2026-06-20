@@ -26,7 +26,7 @@ trap cleanup SIGINT SIGTERM
 # Start AI Engine (Python Flask)
 echo -e "${BLUE}Starting AI Engine...${NC}"
 cd "$SCRIPT_DIR/ai-engine"
-source venv/bin/activate
+source venv/Scripts/activate
 python app.py &
 AI_PID=$!
 sleep 2
