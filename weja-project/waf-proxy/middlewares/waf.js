@@ -46,11 +46,10 @@ const wafMiddleware = async (req, res, next) => {
             geo: req.geoData
         }).catch(() => { });
 
-        return res.status(403).json({
-            error: 'Request Blocked',
-            reason: 'IP Address is blacklisted',
-            blacklistReason: entry.reason,
-            remainingTime: Math.ceil((CONFIG.BLACKLIST_DURATION - (Date.now() - entry.blockedAt)) / 1000) + 's'
+        return res.status(403).render("blocked", {
+            attackType: analysis.type,
+            confidence: `${analysis.confidence * 100}%`,
+            requestId: Date.now().toString()
         });
     }
 
@@ -124,13 +123,19 @@ const wafMiddleware = async (req, res, next) => {
             blacklistService.trackAttack(clientIp, analysis.type);
 
             console.log(`🚫 BLOCKED: ${req.method} ${req.path} - ${analysis.type} (${analysis.confidence})`);
-            return res.status(403).json({
-                error: 'Request Blocked',
-                reason: 'Potential security threat detected',
+            
+            return res.status(403).render("blocked", {
                 attackType: analysis.type,
-                confidence: analysis.confidence,
-                requestId: Date.now().toString() //the date is genrated on the fly not from the db to save time
-            });
+                confidence: `${analysis.confidence * 100}%`,
+                requestId: Date.now().toString()
+            });            
+            // return res.status(403).json({
+            //     error: 'Request Blocked',
+            //     reason: 'Potential security threat detected',
+            //     attackType: analysis.type,
+            //     confidence: analysis.confidence,
+            //     requestId: Date.now().toString() //the date is genrated on the fly not from the db to save time
+            // });
         }
 
         // Allow safe requests

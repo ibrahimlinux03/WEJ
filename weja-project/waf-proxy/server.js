@@ -16,6 +16,9 @@ const apiRoutes = require('./routes/api');
 
 const app = express();
 app.set('trust proxy', true);
+//configure view engine for blocked page
+app.set('view engine', 'ejs');
+app.set('views', __dirname + '/views');
 
 // ============ MIDDLEWARE ============
 app.use(cors());
