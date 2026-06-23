@@ -5,6 +5,7 @@ const logsController = require('../controllers/logsController');
 const healthController = require('../controllers/healthController');
 const blacklistController = require('../controllers/blacklistController');
 const attackersController = require('../controllers/attackersController');
+const geoRoutes = require('./geo');
 const { updateRateLimit, getRateLimit } = require('../middlewares/rateLimiter');
 
 // Logs Routes
@@ -55,5 +56,8 @@ router.post('/rate-limit', (req, res) => {
     });
 
 });
+
+// Geolocation Routes
+router.use('/geo', geoRoutes);
 
 module.exports = router;
