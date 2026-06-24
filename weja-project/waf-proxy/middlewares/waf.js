@@ -49,7 +49,9 @@ const wafMiddleware = async (req, res, next) => {
         return res.status(403).render("blocked", {
             attackType: analysis.type,
             confidence: `${analysis.confidence * 100}%`,
-            requestId: Date.now().toString()
+            Detection_Engine: analysis.decision,
+            requestId: Date.now().toString(),
+           
         });
     }
 
@@ -127,7 +129,9 @@ const wafMiddleware = async (req, res, next) => {
             return res.status(403).render("blocked", {
                 attackType: analysis.type,
                 confidence: `${analysis.confidence * 100}%`,
-                requestId: Date.now().toString()
+                 Detection_Engine: analysis.decision,
+                requestId: Date.now().toString(),
+
             });            
             // return res.status(403).json({
             //     error: 'Request Blocked',
