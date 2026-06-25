@@ -23,10 +23,11 @@ function App() {
   const [stats, setStats] = useState(null)
   const [health, setHealth] = useState(null)
   const [topAttackers, setTopAttackers] = useState([])
+  const [topAttackedRoutes, setTopAttackedRoutes] = useState([])
   const [blacklist, setBlacklist] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [activeTab, setActiveTab] = useState('live') // 'live' | 'attackers' | 'blacklist'
+  const [activeTab, setActiveTab] = useState('live') // 'live' | 'attackers' | 'routes' | 'blacklist'
   const [rateLimit, setRateLimit] = useState({
   windowMs: 60000,
   maxRequests: 50
@@ -36,19 +37,21 @@ function App() {
   const fetchData = useCallback(async () => {
     try {
       setError(null)
-      const [logsRes, statsRes, healthRes, attackersRes, blacklistRes, rateLimitRes] = await Promise.all([
+      const [logsRes, statsRes, healthRes, attackersRes, blacklistRes, rateLimitRes,topAttackedRoutesRes] = await Promise.all([
         axios.get(`${API_URL}/logs?limit=50`),
         axios.get(`${API_URL}/stats`),
         axios.get(`${API_URL}/health`),
         axios.get(`${API_URL}/top-attackers?limit=10`),
         axios.get(`${API_URL}/blacklist`),
-        axios.get(`${API_URL}/rate-limit`)
+        axios.get(`${API_URL}/rate-limit`),
+        axios.get(`${API_URL}/top-attacked-routes?limit=10`)
       ])
       setLogs(logsRes.data.logs)
       setStats(statsRes.data)
       setHealth(healthRes.data)
       setTopAttackers(attackersRes.data.attackers || [])
       setBlacklist(blacklistRes.data.blacklist || [])
+      setTopAttackedRoutes(topAttackedRoutesRes.data.routes || [])
       if (!isEditingRateLimit) {
         setRateLimit(rateLimitRes.data)
       }    
@@ -283,6 +286,12 @@ function App() {
                 🌍 Top Attackers
               </button>
               <button
+                className={`tab-btn ${activeTab === 'routes' ? 'active' : ''}`}
+                onClick={() => setActiveTab('routes')}
+              >
+                🎯 Top Attacked Routes
+              </button>
+              <button
                 className={`tab-btn ${activeTab === 'blacklist' ? 'active' : ''}`}
                 onClick={() => setActiveTab('blacklist')}
               >
@@ -380,6 +389,57 @@ function App() {
                   <div className="empty-state">
                     <span className="empty-state-icon">🌍</span>
                     <p>No attackers detected yet</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Top Attacked Routes Tab */}
+            {activeTab === 'routes' && (
+              <div className="routes-list">
+                {topAttackedRoutes.length > 0 ? (
+                  <table className="attackers-table">
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Route</th>
+                        <th>Attacks</th>
+                        <th>Unique Attackers</th>
+                        <th>Top Attack Type</th>
+                        <th>Top Attacker</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topAttackedRoutes.map((route, index) => (
+                        <tr key={route.route}>
+                          <td className="rank">#{index + 1}</td>
+                          <td className="route-cell">
+                            <code>{route.route}</code>
+                          </td>
+                          <td className="attack-count">
+                            <span className="count-badge">{route.attackCount}</span>
+                          </td>
+                          <td className="unique-attackers">
+                            <span className="count-badge">{route.uniqueAttackers}</span>
+                          </td>
+                          <td className="attack-type">
+                            {route.attackTypes?.[0]?.type || 'N/A'} ({route.attackTypes?.[0]?.count || 0})
+                          </td>
+                          <td className="top-attacker">
+                            {route.topAttackers?.[0]?.ip ? (
+                              <code>{route.topAttackers[0].ip}</code>
+                            ) : (
+                              'N/A'
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty-state">
+                    <span className="empty-state-icon">🎯</span>
+                    <p>No attacked routes detected yet</p>
                   </div>
                 )}
               </div>
