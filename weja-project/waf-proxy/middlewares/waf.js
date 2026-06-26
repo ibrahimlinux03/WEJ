@@ -45,12 +45,20 @@ const wafMiddleware = async (req, res, next) => {
             responseTime: Date.now() - startTime,
             geo: req.geoData
         }).catch(() => { });
+        
+        // Render the Blacklist page with additional details
 
-        return res.status(403).render("blocked", {
-            attackType: analysis.type,
-            confidence: `${analysis.confidence * 100}%`,
-            requestId: Date.now().toString()
+        return res.status(403).render("Blacklist", {
+            requestId: Date.now().toString(),
         });
+
+        // return res.status(403).render("blocked", {
+        //     attackType: analysis.type,
+        //     confidence: `${analysis.confidence * 100}%`,
+        //     Detection_Engine: analysis.decision,
+        //     requestId: Date.now().toString(),
+           
+        // });
     }
 
     // Extract request data for analysis
@@ -127,15 +135,10 @@ const wafMiddleware = async (req, res, next) => {
             return res.status(403).render("blocked", {
                 attackType: analysis.type,
                 confidence: `${analysis.confidence * 100}%`,
-                requestId: Date.now().toString()
+                 Detection_Engine: analysis.decision,
+                requestId: Date.now().toString(),
+
             });            
-            // return res.status(403).json({
-            //     error: 'Request Blocked',
-            //     reason: 'Potential security threat detected',
-            //     attackType: analysis.type,
-            //     confidence: analysis.confidence,
-            //     requestId: Date.now().toString() //the date is genrated on the fly not from the db to save time
-            // });
         }
 
         // Allow safe requests

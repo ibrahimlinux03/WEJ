@@ -158,8 +158,6 @@ def rule_based_detect(payload: str) -> tuple:
 
 def detect_attack_type(payload: str) -> tuple:
    
-   
-    
     # Get ML result
     ml_type, ml_conf = predict_threat(payload)
     
@@ -227,7 +225,8 @@ def analyze_request():
             "analyzed_path": path,
             "payload_length": len(payload),
             "ml_prediction": ml_type,
-            "ml_confidence": round(ml_conf, 2)
+            "ml_confidence": round(ml_conf, 2),
+        
         }
         
         if is_blocked:
