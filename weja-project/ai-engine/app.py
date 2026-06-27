@@ -124,9 +124,7 @@ def calculate_network_metrics(client_ip, passed_total_packets=0):
         'Total Fwd Packets': passed_total_packets if passed_total_packets > 0 else len(timestamps)
     }
     return metrics
-    except Exception as e:
-        app.logger.error(f"ML prediction error: {e}")
-        return "SAFE", 0.1
+   
 
 
 
@@ -363,15 +361,7 @@ def fallback_analyze():
             'payload_length': len(payload),
             'ml_prediction': ml_label,
             'ml_confidence': round(ml_conf, 2)
-        response = {
-            "blocked": is_blocked,
-            "confidence": confidence,
-            "type": attack_type,
-            "analyzed_method": method,
-            "analyzed_path": path,
-            "payload_length": len(payload),
-            "ml_prediction": ml_type,
-            "ml_confidence": round(ml_conf, 2),
+       
         
         }
         
