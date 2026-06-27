@@ -66,14 +66,65 @@ def predict_threat(request_text: str):
 # Weighted rules
 # -----------------------------
 SQLI_PATTERNS = [
-    (r"(\%27)|(\')|(\-\-)|(\%23)|(#)",20),
-    (r"((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;))",30),
-    (r"\w*((\%27)|(\'))((\\%6F)|o|(\%4F))((\%72)|r|(\%52))",35),
-    (r"((\%27)|(\'))union",40),
-    (r"exec(\s|\+)+(s|x)p\w+",50),
-    (r"(select|insert|update|delete|drop|truncate|alter)\s",25),
-    (r"1\s*=\s*1",35),
-    (r"\'\s*or\s*\'",35),
+    # Comment markers and string terminators
+    (r"(\%27)|(\')|(\-\-)|(\%23)|(#)|(\/\*)|(\*\/)|(;--)|(\%3B--)", 20),
+    
+    # Equals with quotes or comments
+    (r"((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;)|(\/\*))", 30),
+    
+    # 'or' and 'and' with whitespace variants
+    (r"(\b(or|and|xor)\b\s+\w+\s*=\s*\w+)", 35),
+    (r"(\w*\s*(or|and|xor)\s+\w+\s*=\s*\w+)", 30),
+    
+    # Union-based injections
+    (r"((\%27)|(\')|(\%22)|(\"))\s*(union|UNION)\s+(all|ALL)?\s*select", 45),
+    (r"(union|UNION)\s+(all|ALL)?\s*select\s+.*?\s+from", 40),
+    
+    # Stored procedures
+    (r"(exec|EXEC)\s*(\s|\+)+(s|x)p_\w+", 50),
+    (r"(exec|EXECUTE)\s*(\s|\+)*\(.*?\)", 40),
+    
+    # DML/DDL statements
+    (r"\b(select|insert|update|delete|drop|truncate|alter|create|rename|replace)\s+", 25),
+    
+    # Always true conditions
+    (r"(1\s*=\s*1|1\s*=\s*'1'|1\s*=\s*\"1\"|'1'\s*=\s*'1'|\"1\"\s*=\s*\"1\")", 35),
+    (r"(\'\s*(or|and|xor)\s*\'|\"\s*(or|and|xor)\s*\")", 35),
+    
+    # Time-based attacks
+    (r"\b(sleep|benchmark|pg_sleep|waitfor)\s*\(", 45),
+    (r"waitfor\s+delay\s+['\"]\d+:\d+:\d+['\"]", 50),
+    
+    # Error-based injections
+    (r"\b(convert|cast)\s*\(.*?\s+as\s+", 35),
+    (r"\b(extractvalue|updatexml|floor)\s*\(.*?,.*?\)", 40),
+    
+    # Stacked queries
+    (r";\s*(select|insert|update|delete|drop|truncate|alter|exec|execute)", 35),
+    
+    # Database-specific functions
+    (r"\b(database|user|version|current_user|system_user)\s*\(\)", 30),
+    (r"\b(@@version|@@datadir|@@basedir)\b", 35),
+    
+    # Hex/encoding evasion
+    (r"0x[0-9a-fA-F]{4,}", 30),
+    (r"char\s*\([\d,]+\)", 25),
+    (r"unicode\s*\(['\"][^'\"]+['\"]\)", 25),
+    
+    # Boolean-based blind
+    (r"(\b(and|or|xor)\b\s+.*?\s*[=<>!]+\s*.*?\s*(and|or|xor)?\s*\w+\s*[=<>!]+\s*\w+)", 35),
+    (r"\b(substr|mid|left|right)\s*\(.*?,\s*\d+,\s*\d+\)\s*[=<>]", 35),
+    
+    # Information schema access
+    (r"\b(information_schema|sys\.|master\.|mysql\.|performance_schema)\b", 40),
+    
+    # Out-of-band attacks
+    (r"\b(load_file|into\s+outfile|into\s+dumpfile)\b", 50),
+    (r"\b(xp_cmdshell|xp_regread|xp_regwrite)\b", 50),
+    
+    # Space evasion
+    (r"\w+\s*\+\s*\w+\s*=\s*\w+", 25),  # 'or'+'1'='1'
+    (r"(\/\*.*?\*\/)", 20),  # Inline comments
 ]
 
 XSS_PATTERNS = [
@@ -104,10 +155,10 @@ CMD_PATTERNS = [
 ]
 
 ATTACKS = {
-    "SQL_INJECTION": SQLI_PATTERNS,
-    "XSS": XSS_PATTERNS,
-    "PATH_TRAVERSAL": PATH_PATTERNS,
-    "COMMAND_INJECTION": CMD_PATTERNS,
+    "sqli": SQLI_PATTERNS,
+    "xss": XSS_PATTERNS,
+    "path-traversal": PATH_PATTERNS,
+    "cmdi": CMD_PATTERNS,
 }
 
 def calculate_rule_confidence(payload, patterns):
