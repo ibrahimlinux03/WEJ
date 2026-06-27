@@ -27,7 +27,7 @@ trap cleanup SIGINT SIGTERM
 echo -e "${BLUE}Starting AI Engine...${NC}"
 cd "$SCRIPT_DIR/ai-engine"
 source venv/Scripts/activate
-python app.py &
+python hybrid_waf_ai_engine.py &
 AI_PID=$!
 sleep 2
 

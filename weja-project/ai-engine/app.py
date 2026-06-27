@@ -15,6 +15,8 @@ CORS(app)
 # 1. CUSTOM FEATURE EXTRACTION (MUST BE FIRST)
 # ==========================================
 
+
+
 def extract_special_features(texts):
     """
     Custom feature engineering function required by the Tier 1 Logistic Regression model.
@@ -122,6 +124,11 @@ def calculate_network_metrics(client_ip, passed_total_packets=0):
         'Total Fwd Packets': passed_total_packets if passed_total_packets > 0 else len(timestamps)
     }
     return metrics
+    except Exception as e:
+        app.logger.error(f"ML prediction error: {e}")
+        return "SAFE", 0.1
+
+
 
 
 def predict_payload_anomaly(request_text):
@@ -208,6 +215,17 @@ def evaluate_hybrid_inspection(payload):
     if is_malicious and rule_conf > 0.6:
         return True, attack_type, round(rule_conf * 0.85, 2)
     return False, 'SAFE', round(max(1 - rule_conf, 0.05), 2)
+def detect_attack_type(payload: str) -> tuple:
+   
+    # Get ML result
+    ml_type, ml_conf = predict_threat(payload)
+    
+   
+    
+    if ml_type != "norm" and ml_conf > 0.6:
+        return True, ml_type, round(ml_conf * 0.85, 2)
+    # No threat detected
+    return False, "SAFE", round(max(1 - ml_conf, 0.05), 2)
 
 # ==========================================
 # 5. FLASK SERVER CONTROLLERS / ENDPOINTS
@@ -345,6 +363,16 @@ def fallback_analyze():
             'payload_length': len(payload),
             'ml_prediction': ml_label,
             'ml_confidence': round(ml_conf, 2)
+        response = {
+            "blocked": is_blocked,
+            "confidence": confidence,
+            "type": attack_type,
+            "analyzed_method": method,
+            "analyzed_path": path,
+            "payload_length": len(payload),
+            "ml_prediction": ml_type,
+            "ml_confidence": round(ml_conf, 2),
+        
         }
         
         if is_blocked:

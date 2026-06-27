@@ -23,6 +23,9 @@ router.delete('/blacklist/:ip', blacklistController.removeBlacklist);
 // Top Attackers
 router.get('/top-attackers', attackersController.getTopAttackers);
 
+//Top attacked routes
+router.get('/top-attacked-routes', attackersController.getTopAttackedRoutes);
+
 // Get current rate limit settings
 router.get('/rate-limit', (req, res) => {
 
