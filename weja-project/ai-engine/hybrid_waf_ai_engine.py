@@ -8,6 +8,7 @@ Refactored hybrid engine:
 - Decision fusion
 """
 
+import os
 import re
 import numpy as np
 from flask import Flask, request, jsonify
@@ -191,7 +192,36 @@ def rule_based_detect(payload):
 # -----------------------------
 # Hybrid decision
 # -----------------------------
-def detect_attack_type(payload):
+def should_run_logistic_regression(behavioral_result):
+    if behavioral_result is None:
+        return True
+    if not isinstance(behavioral_result, dict):
+        return True
+    if behavioral_result.get('blocked') is True:
+        return False
+    if behavioral_result.get('safe') is False:
+        return False
+    if behavioral_result.get('behavioral_safe') is False:
+        return False
+    attack_type = str(behavioral_result.get('type', 'SAFE')).upper()
+    if attack_type not in {'SAFE', '', 'NONE', 'UNKNOWN'}:
+        return False
+    return True
+
+
+def detect_attack_type(payload, behavioral_result=None):
+
+    if not should_run_logistic_regression(behavioral_result):
+        return {
+            "blocked": True,
+            "type": behavioral_result.get("type", "BEHAVIORAL_BLOCK"),
+            "confidence": behavioral_result.get("confidence", 0.95),
+            "rule_confidence": None,
+            "ml_confidence": None,
+            "matched_rules": [],
+            "decision": "BEHAVIORAL_GATE",
+            "ml_ran": False
+        }
 
     rule_hit, rule_type, rule_conf, matches = rule_based_detect(payload)
 
@@ -266,7 +296,8 @@ def analyze():
 
         combined=f"{payload} {path}"
 
-        result=detect_attack_type(combined)
+        behavioral_result = data.get("behavioral_result") or data.get("behavioral")
+        result=detect_attack_type(combined, behavioral_result=behavioral_result)
 
         result.update({
             "payload_length":len(payload),
@@ -285,4 +316,5 @@ def analyze():
         }),500
 
 if __name__=="__main__":
-    app.run(host="0.0.0.0",port=5000,debug=False)
+    port = int(os.environ.get("AI_ENGINE_PORT", os.environ.get("PORT", "5000")))
+    app.run(host="0.0.0.0",port=port,debug=False)

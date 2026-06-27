@@ -9,7 +9,7 @@ const methodOverride = require('method-override');
 const path = require('path');
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.TARGET_PORT || process.env.PORT || 4000;
 
 // MongoDB Connection
 mongoose.connect('mongodb://localhost:27017/weja-target', {

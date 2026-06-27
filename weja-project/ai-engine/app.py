@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 import time
@@ -213,10 +214,29 @@ def evaluate_hybrid_inspection(payload):
     if is_malicious and rule_conf > 0.6:
         return True, attack_type, round(rule_conf * 0.85, 2)
     return False, 'SAFE', round(max(1 - rule_conf, 0.05), 2)
+
+
+def should_run_logistic_regression(behavioral_result):
+    if behavioral_result is None:
+        return True
+    if not isinstance(behavioral_result, dict):
+        return True
+    if behavioral_result.get('blocked') is True:
+        return False
+    if behavioral_result.get('safe') is False:
+        return False
+    if behavioral_result.get('behavioral_safe') is False:
+        return False
+    attack_type = str(behavioral_result.get('type', 'SAFE')).upper()
+    if attack_type not in {'SAFE', '', 'NONE', 'UNKNOWN'}:
+        return False
+    return True
+
+
 def detect_attack_type(payload: str) -> tuple:
    
     # Get ML result
-    ml_type, ml_conf = predict_threat(payload)
+    ml_type, ml_conf = predict_payload_anomaly(payload)
     
    
     
@@ -348,6 +368,31 @@ def fallback_analyze():
         req_path = body_data.get('path', '')
         req_method = body_data.get('method', 'GET')
         combined_string = f"{payload} {req_path}"
+
+        behavioral_result = body_data.get('behavioral_result') or body_data.get('behavioral')
+        if isinstance(behavioral_result, dict) and behavioral_result.get('blocked') is True:
+            return jsonify({
+                'blocked': True,
+                'confidence': behavioral_result.get('confidence', 1.0),
+                'type': behavioral_result.get('type', 'BEHAVIORAL_BLOCK'),
+                'analyzed_method': req_method,
+                'analyzed_path': req_path,
+                'payload_length': len(payload),
+                'ml_ran': False,
+                'behavioral_result': behavioral_result
+            })
+
+        if not should_run_logistic_regression(behavioral_result):
+            return jsonify({
+                'blocked': False,
+                'confidence': behavioral_result.get('confidence', 0.1) if isinstance(behavioral_result, dict) else 0.1,
+                'type': 'SAFE',
+                'analyzed_method': req_method,
+                'analyzed_path': req_path,
+                'payload_length': len(payload),
+                'ml_ran': False,
+                'behavioral_result': behavioral_result
+            })
         
         is_blocked, attack_label, final_confidence = evaluate_hybrid_inspection(combined_string)
         ml_label, ml_conf = predict_payload_anomaly(combined_string)
@@ -360,9 +405,9 @@ def fallback_analyze():
             'analyzed_path': req_path,
             'payload_length': len(payload),
             'ml_prediction': ml_label,
-            'ml_confidence': round(ml_conf, 2)
-       
-        
+            'ml_confidence': round(ml_conf, 2),
+            'ml_ran': True,
+            'behavioral_result': behavioral_result
         }
         
         if is_blocked:
@@ -378,7 +423,8 @@ def fallback_analyze():
 
 
 if __name__ == '__main__':
+    port = int(os.environ.get('AI_ENGINE_PORT', os.environ.get('PORT', '5000')))
     print('[WEJA] AI Engine starting...')
-    print('[*] Listening on http://localhost:5000')
+    print(f'[*] Listening on http://0.0.0.0:{port}')
     print('[*] Using hybrid detection: Rule-based + ML (LogisticRegression) + Tier 2 Sequence Behavior')
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)

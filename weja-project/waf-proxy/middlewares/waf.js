@@ -147,19 +147,41 @@ const wafMiddleware = async (req, res, next) => {
         confidence: analysis.confidence,
         requestId: Date.now().toString(),
       });
-      console.log(
-        `🚫 BLOCKED: ${req.method} ${req.path} - ${analysis.type} (${analysis.confidence})`,
-      );
-
-      return res.status(403).render("blocked", {
-        attackType: analysis.type,
-        confidence: `${analysis.confidence * 100}%`,
-        Detection_Engine: analysis.decision,
-        requestId: Date.now().toString(),
-      });
     }
 
-    console.log(`✅ WAF ALLOW: ${req.method} ${req.path}`);
+    try {
+      const hybridResponse = await aiClient.post("/analyze", {
+        ip: clientIp,
+        payload: payloadString,
+        method: req.method,
+        path: req.path,
+        headers: requestData.headers,
+        totalPackets: requestData.totalPackets,
+        behavioral_result: analysis,
+      });
+
+      const hybridAnalysis = hybridResponse.data;
+
+      if (hybridAnalysis.blocked) {
+        blacklistService.trackAttack(clientIp, hybridAnalysis.type);
+        console.log(
+          `🚫 Hybrid WAF BLOCK: ${req.method} ${req.path} -> Motive: ${hybridAnalysis.type} (Conf: ${hybridAnalysis.confidence})`,
+        );
+        return res.status(403).json({
+          error: "Request Blocked",
+          reason:
+            "Potential payload threat detected after behavioral inspection.",
+          attackType: hybridAnalysis.type,
+          confidence: hybridAnalysis.confidence,
+          requestId: Date.now().toString(),
+        });
+      }
+    } catch (hybridError) {
+      console.warn(
+        `⚠️ Hybrid analysis failed after safe behavior check: ${hybridError.message}`,
+      );
+    }
+
     next();
   } catch (error) {
     // FAILOVER LAYER: If Tier 2 route drops or breaks, instantly fall back to standard Tier 1 payload metrics
